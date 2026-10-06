@@ -1,0 +1,13 @@
+.{
+    .name = .any_filechooser,
+    .version = "0.0.0",
+    .fingerprint = 0x79f9de87ecfcc602, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .goose = .{
+            .url = "git+https://github.com/luxluth/goose.git?ref=master#317713b86ea1d0231ee3d21b5fa8318b011d1f62",
+            .hash = "goose-4.0.0-e9MzMIMrBAB6GuiAPfIK60OGQI9VGxpFMibvpc95BOva",
+        },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
+}

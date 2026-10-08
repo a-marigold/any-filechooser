@@ -4,12 +4,14 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const goose = b.dependency(
-        "goose",
-        .{ .target = target, .optimize = optimize },
-    );
+    const glib = b.addTranslateC(.{
+        .root_source_file = b.path("src/glibBridge.h"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
 
-    const gooseModule = goose.module("goose");
+    glib.linkSystemLibrary("glib-2.0", .{});
 
     const exe = b.addExecutable(.{
         .name = "any_filechooser",
@@ -17,14 +19,16 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .link_libc = true,
             .imports = &.{
-                .{ .name = "goose", .module = gooseModule },
+                .{ .name = "glib", .module = glib.createModule() },
             },
         }),
     });
 
+    exe.root_module.linkSystemLibrary("glib-2.0", .{});
     b.installArtifact(exe);
 
     const checkStep = b.step("check", "Build on save");
-    exe.step.dependOn(checkStep);
+    checkStep.dependOn(&exe.step);
 }

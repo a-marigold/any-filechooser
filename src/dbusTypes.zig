@@ -48,3 +48,25 @@ const ObjectPath = struct { path: [:0]const u8 };
 pub fn getObjectPath(path: [:0]const u8) ObjectPath {
     return .{ .path = path };
 }
+
+/// Returns a string corresponding to a type `T` in accordance to the specification:
+///
+/// https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
+fn signatureFromType(comptime T: type) []const u8 {
+    return switch (T) {
+        i16 => "n",
+        i32 => "i",
+        i64 => "x",
+        u8 => "y",
+        u16 => "q",
+        u32 => "u",
+        u64 => "t",
+        f64 => "d",
+
+        bool => "b",
+
+        []const u8 => "s",
+
+        ObjectPath => "o",
+    };
+}

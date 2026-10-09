@@ -4,10 +4,10 @@ const Type = std.lang.Type;
 /// Creates a Property representation of a D-Bus interface.
 ///
 /// Used to be recognized by D-Bus functions as an interface property.
-pub fn Prop(comptime V: type, comptime mode: enum { Read, Write, ReadWrite }) type {
+pub fn Prop(comptime V: type, comptime accessMode: enum { Read, Write, ReadWrite }) type {
     return struct {
-        value: V,
-        pub const MODE = mode;
+        pub const Value = V;
+        pub const MODE = accessMode;
 
         pub const __IS_DBUS_PROP__ = true;
     };
@@ -68,5 +68,38 @@ fn signatureFromType(comptime T: type) []const u8 {
         []const u8 => "s",
 
         ObjectPath => "o",
+    };
+}
+
+/// Counts quantity of properties, singals
+/// and methods of a D-Bus interface of type `T`.
+///
+/// Shows a compile error if `T` fields contain anything expect `Prop`, `Signal` and `Method`.
+///
+/// Used for static allocations.
+fn countInterfaceFields(comptime T: type) struct {
+    props: comptime_int,
+    signals: comptime_int,
+    methods: comptime_int,
+} {
+    const TInfo: Type.Struct = @typeInfo(T).@"struct";
+
+    var propCount = 0;
+    var signalCount = 0;
+    var methodCount = 0;
+
+    inline for (TInfo.field_types) |fieldType|
+        if (isProp(fieldType)) {
+            propCount += 1;
+        } else if (isSignal(fieldType)) {
+            signalCount += 1;
+        } else if (isMethod(fieldType)) {
+            methodCount += 1;
+        } else @compileError("Interface field can only be a Property, Signal or Method");
+
+    return .{
+        .props = propCount,
+        .signals = signalCount,
+        .methods = methodCount,
     };
 }

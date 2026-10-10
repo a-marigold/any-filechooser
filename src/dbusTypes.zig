@@ -3,10 +3,16 @@
 /// Used to be recognized by D-Bus functions as an interface property.
 pub fn Prop(comptime V: type, comptime mode: enum { Read, Write, ReadWrite }) type {
     return struct {
-        pub const Value = V;
+        value: V,
+
+        pub const Type = V;
         pub const MODE = mode;
 
         pub const __IS_DBUS_PROP__ = true;
+
+        pub fn init(value: V) V {
+            return .{ .value = value };
+        }
     };
 }
 pub fn isProp(comptime T: type) bool {
@@ -19,6 +25,10 @@ pub fn isProp(comptime T: type) bool {
 pub fn Signal() type {
     return struct {
         pub const __IS_DBUS_SIGNAL__ = true;
+
+        pub fn init() @This() {
+            return .{};
+        }
     };
 }
 pub fn isSignal(comptime T: type) bool {
@@ -33,15 +43,22 @@ pub fn Method(comptime Callback: type) type {
         callback: Callback,
 
         pub const __IS_DBUS_METHOD__ = true;
+
+        pub fn init(callback: Callback) @This() {
+            return .{ .callback = callback };
+        }
     };
 }
 pub fn isMethod(comptime T: type) bool {
     return @hasField(T, "__IS_DBUS_METHOD__");
 }
 
-const ObjectPath = struct { path: [:0]const u8 };
-/// Does nothing but creates a distinct type (`ObjectPath`) instance
-/// to be recognized by as an object path and not a plain string in D-Bus functions.
-pub fn getObjectPath(path: [:0]const u8) ObjectPath {
-    return .{ .path = path };
-}
+/// Used to create a distinct type to be recognized
+/// as an object path and not a plain string in D-Bus functions.
+pub const ObjectPath = struct {
+    path: [:0]const u8,
+
+    pub fn init(path: [:0]const u8) @This() {
+        return .{ .path = path };
+    }
+};

@@ -31,27 +31,22 @@ pub const Conn = struct {
         return .{ .conn = conn.?, .busNameId = undefined };
     }
 
-    const BusName = struct { id: glib.guint };
     /// Requests the D-Bus for a well-known name.
-    ///
-    /// Returns `BusName` to allow manual unowning of `name`.
-    pub fn requestBusName(self: *@This(), name: [:0]const u8) BusName {
-        return .{
-            .id = glib.g_bus_own_name_on_connection(
-                self.conn,
-                name,
-                G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE,
-                null,
-                null,
-                null,
-                null,
-                null,
-            ),
-        };
+    pub fn requestBusName(self: *@This(), name: [:0]const u8) void {
+        _ = glib.g_bus_own_name_on_connection(
+            self.conn,
+            name,
+            G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE,
+            null,
+            null,
+            null,
+            null,
+            null,
+        );
     }
 
     const RegisterObjectError = error{RegisterFail};
-    /// Registers `objectPath` and `Interface` at the path.
+    /// Registers `objectPath` and `Interface` at that path.
     ///
     /// Fields of `Interface` struct can be:
     /// - `types.Prop`
@@ -59,17 +54,17 @@ pub const Conn = struct {
     /// - `types.Method`
     ///
     /// If a field of `Interface` struct isn't
-    /// the above ones, a compile error is triggerred.
+    /// the one above types, a compile error is triggerred.
     ///
     /// Declarations of `Interface` are ignored.
     pub fn registerSingleton(
         self: *@This(),
         objectPath: [:0]const u8,
-        comptime Interface: type,
+        comptime interface: types.Interface,
         interfaceName: [:0]const u8,
     ) RegisterObjectError!void {
         const interface: *glib.GDBusInterfaceInfo = block: {
-            const fieldsCount = types.countInterfaceFields(Interface);
+            const fieldsCount = countInterfaceFields(interface);
 
             const infoArrays = struct {
                 var PROPS: *[fieldsCount.props]glib.GDBusPropertyInfo = undefined;
@@ -78,7 +73,7 @@ pub const Conn = struct {
             };
 
             getInterfaceInfo(
-                Interface,
+                interface,
                 .Static,
                 .{
                     .props = &infoArrays.PROPS,
@@ -117,6 +112,7 @@ pub const Conn = struct {
             null,
             null,
             null,
+
             null,
         );
 
@@ -124,9 +120,12 @@ pub const Conn = struct {
     }
 };
 
-/// Returns a string corresponding to a type `T` in accordance to the specification:
+/// Returns a D-Bus signature string.
 ///
-/// https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
+/// `T` must be one of types from `dbusTypes` module
+/// (primitives like `bool` and `u64` are passes as-is).
+///
+/// See - https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
 pub fn signatureFromType(comptime T: type) []const u8 {
     return switch (T) {
         i16 => "n",
@@ -138,8 +137,33 @@ pub fn signatureFromType(comptime T: type) []const u8 {
         u64 => "t",
         f64 => "d",
         bool => "b",
-        []const u8 => "s",
+        types.String => "s",
         types.ObjectPath => "o",
+        else => block: {
+            if (types.isVariant(T)) break :block "v";
+            if (types.isArray(T)) {
+                break :block "a" ++ comptime signatureFromType(@field(T, "Element"));
+            }
+            if (types.isStruct(T)) {
+                var signature: []const u8 = "(";
+
+                const TInfo: Type.Struct = @typeInfo(@field(T, "TYPE"));
+
+                inline for (TInfo.field_types) |fieldType| {
+                    signature = signature ++ signatureFromType(fieldType);
+                }
+
+                signature = signature ++ ")";
+
+                break :block signature;
+            }
+            if (types.isDictEntry(T)) {
+                const Key = @field(T, "Key");
+                const Value = @field(T, "Value");
+
+                break :block comptime "{" ++ signatureFromType(Key) ++ signatureFromType(Value);
+            }
+        },
     };
 }
 

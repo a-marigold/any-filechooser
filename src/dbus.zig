@@ -20,7 +20,6 @@ const STATIC_REF_COUNT = -1;
 /// D-Bus connection.
 pub const Conn = struct {
     conn: *glib.GDBusConnection,
-    busNameId: glib.guint,
 
     const InitError = error{InitFail};
     /// Initializes a connection to a user session D-Bus.
@@ -30,6 +29,25 @@ pub const Conn = struct {
         if (conn == null) return InitError.InitFail;
 
         return .{ .conn = conn.?, .busNameId = undefined };
+    }
+
+    const BusName = struct { id: glib.guint };
+    /// Requests the D-Bus for an unique bus `name`.
+    ///
+    /// Returns `BusName` to allow manual unowning `name`.
+    pub fn requestBusName(self: *@This(), name: [:0]const u8) BusName {
+        return .{
+            .id = glib.g_bus_own_name_on_connection(
+                self.conn,
+                name,
+                G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE,
+                null,
+                null,
+                null,
+                null,
+                null,
+            ),
+        };
     }
 };
 /// Returns a string corresponding to a type `T` in accordance to the specification:
@@ -54,7 +72,7 @@ pub fn signatureFromType(comptime T: type) []const u8 {
 /// Counts quantity of properties, singals
 /// and methods of a D-Bus interface of type `T`.
 ///
-/// Shows a compile error if `T` fields contain anything expect `Prop`, `Signal` and `Method`.
+/// Triggers a compile error if `T` fields contain anything expect `Prop`, `Signal` and `Method`.
 ///
 /// Used for static allocations.
 pub fn countInterfaceFields(comptime T: type) struct {

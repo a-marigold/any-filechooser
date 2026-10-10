@@ -1,26 +1,34 @@
 //! Library-independent D-Bus API.
 
 const std = @import("std");
+const Type = std.lang.Type;
 const mem = std.mem;
 const Io = std.Io;
 const process = std.process;
-const goose = @import("goose");
+const glib = @import("glib");
+const types = @import("dbusTypes.zig");
+
+const USER_SESSION_BUS_TYPE = glib.BusType.G_BUS_TYPE_SESSION;
+
+const G_DBUS_PROPERTY_INFO_FLAGS_READABLE = glib.Gio.DBusPropertyInfoFlags.G_DBUS_PROPERTY_INFO_FLAGS_READABLE;
+const G_DBUS_PROPERTY_INFO_FLAGS_WRITABLE = glib.Gio.DBusPropertyInfoFlags.G_DBUS_PROPERTY_INFO_FLAGS_WRITABLE;
+
+const G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE = glib.BusNameOwnerFlags.G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE;
+
+const STATIC_REF_COUNT = -1;
 
 /// D-Bus connection.
 pub const Conn = struct {
-    inner: goose.Connection,
+    conn: *glib.GDBusConnection,
+    busNameId: glib.guint,
 
-    /// Initializes a connection to the session D-Bus.
-    pub fn init(allocator: mem.Allocator, io: Io, env: process.Environ.Map) !@This() {
-        return .{ .inner = .init(allocator, .Session, io, env) };
-    }
-    /// Requests the D-Bus for an unique bus `name`.
-    pub fn requestBusName(self: *@This(), name: [:0]const u8) !void {
-        return self.inner.requestName(name);
-    }
-    /// Registers interface of type `T` with `name` at `objectPath`.
-    // TODO: `T` interface documentation
-    pub fn registerInterface(self: *@This(), comptime T: type, name: [:0]const u8, objectPath: [:0]const u8) !void {
-        return self.inner.registerObject(T, name, objectPath, {});
+    const InitError = error{InitFail};
+    /// Initializes a connection to a user session D-Bus.
+    pub inline fn init() InitError!@This() {
+        const conn = glib.g_bus_get_sync(USER_SESSION_BUS_TYPE, null, null);
+
+        if (conn == null) return InitError.InitFail;
+
+        return .{ .conn = conn.?, .busNameId = undefined };
     }
 };

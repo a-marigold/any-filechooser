@@ -5,54 +5,6 @@
 //!
 //! https://dbus.freedesktop.org/doc/dbus-specification.html#container-types
 
-/// Creates a Property representation of a D-Bus interface.
-pub fn Prop(comptime V: type, comptime mode: enum { Read, Write, ReadWrite }) type {
-    return struct {
-        value: V,
-
-        pub const Type = V;
-        pub const MODE = mode;
-        pub const __IS_DBUS_PROP__ = true;
-
-        pub fn init(value: V) V {
-            return .{ .value = value };
-        }
-    };
-}
-pub fn isProp(comptime T: type) bool {
-    return @hasField(T, "__IS_DBUS_PROP__");
-}
-
-/// Creates a Signal representation of D-Bus interface.
-pub fn Signal() type {
-    return struct {
-        pub const __IS_DBUS_SIGNAL__ = true;
-
-        pub fn init() @This() {
-            return .{};
-        }
-    };
-}
-pub fn isSignal(comptime T: type) bool {
-    return @hasField(T, "__IS_DBUS_SIGNAL__");
-}
-
-/// Creates a Method representation of a D-Bus interface.
-pub fn Method(comptime Callback: type) type {
-    return struct {
-        callback: Callback,
-
-        pub const __IS_DBUS_METHOD__ = true;
-
-        pub fn init(callback: Callback) @This() {
-            return .{ .callback = callback };
-        }
-    };
-}
-pub fn isMethod(comptime T: type) bool {
-    return @hasField(T, "__IS_DBUS_METHOD__");
-}
-
 pub const String = [:0]const u8;
 
 pub const ObjectPath = struct {
@@ -133,3 +85,60 @@ pub fn DictEntry(comptime K: type, comptime V: type) type {
 pub fn isDictEntry(comptime T: type) bool {
     return @hasField(T, "__IS_DBUS_DICT_ENTRY__");
 }
+
+/// Creates a Property representation of a D-Bus interface.
+pub fn Prop(comptime V: type, comptime mode: enum { Read, Write, ReadWrite }) type {
+    return struct {
+        value: V,
+
+        pub const Type = V;
+        pub const MODE = mode;
+        pub const __IS_DBUS_PROP__ = true;
+
+        pub fn init(value: V) V {
+            return .{ .value = value };
+        }
+    };
+}
+pub fn isProp(comptime T: type) bool {
+    return @hasField(T, "__IS_DBUS_PROP__");
+}
+
+/// Creates a Signal representation of D-Bus interface.
+pub fn Signal() type {
+    return struct {
+        pub const __IS_DBUS_SIGNAL__ = true;
+
+        pub fn init() @This() {
+            return .{};
+        }
+    };
+}
+pub fn isSignal(comptime T: type) bool {
+    return @hasField(T, "__IS_DBUS_SIGNAL__");
+}
+
+/// Creates a Method representation of a D-Bus interface.
+pub fn Method(comptime Callback: type) type {
+    return struct {
+        callback: Callback,
+
+        pub const __IS_DBUS_METHOD__ = true;
+
+        pub fn init(callback: Callback) @This() {
+            return .{ .callback = callback };
+        }
+    };
+}
+pub fn isMethod(comptime T: type) bool {
+    return @hasField(T, "__IS_DBUS_METHOD__");
+}
+
+/// Returns a representation of a D-Bus interface.
+pub const Interface = struct {
+    name: []const u8,
+
+    props: []const struct { name: []const u8, type: type },
+    signals: []const struct { name: []const u8 },
+    methods: []const struct { name: []const u8, type: type },
+};

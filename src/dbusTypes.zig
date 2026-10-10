@@ -62,3 +62,24 @@ pub const ObjectPath = struct {
         return .{ .path = path };
     }
 };
+
+/// Creates a Variant D-Bus type representation.
+///
+/// `T` is a union-type of the Variant.
+///
+/// Used to be recognized by D-Bus functions as a Variant.
+pub fn Variant(comptime T: type) type {
+    return struct {
+        value: T,
+
+        pub const TYPE = T;
+        pub const __IS_DBUS_VARIANT__ = true;
+
+        pub fn init(value: T) @This() {
+            return .{ .value = value };
+        }
+    };
+}
+pub fn isVariant(comptime T: type) bool {
+    return @hasField(T, "__IS_DBUS_VARIANT");
+}

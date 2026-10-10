@@ -32,9 +32,9 @@ pub const Conn = struct {
     }
 
     const BusName = struct { id: glib.guint };
-    /// Requests the D-Bus for an unique bus `name`.
+    /// Requests the D-Bus for a well-known name.
     ///
-    /// Returns `BusName` to allow manual unowning `name`.
+    /// Returns `BusName` to allow manual unowning of `name`.
     pub fn requestBusName(self: *@This(), name: [:0]const u8) BusName {
         return .{
             .id = glib.g_bus_own_name_on_connection(
@@ -49,7 +49,81 @@ pub const Conn = struct {
             ),
         };
     }
+
+    const RegisterObjectError = error{RegisterFail};
+    /// Registers `objectPath` and `Interface` at the path.
+    ///
+    /// Fields of `Interface` struct can be:
+    /// - `types.Prop`
+    /// - `types.Signal`
+    /// - `types.Method`
+    ///
+    /// If a field of `Interface` struct isn't
+    /// the above ones, a compile error is triggerred.
+    ///
+    /// Declarations of `Interface` are ignored.
+    pub fn registerSingleton(
+        self: *@This(),
+        objectPath: [:0]const u8,
+        comptime Interface: type,
+        interfaceName: [:0]const u8,
+    ) RegisterObjectError!void {
+        const interface: *glib.GDBusInterfaceInfo = block: {
+            const fieldsCount = types.countInterfaceFields(Interface);
+
+            const infoArrays = struct {
+                var PROPS: *[fieldsCount.props]glib.GDBusPropertyInfo = undefined;
+                var SIGNALS: *[fieldsCount.props]glib.GDBusSignalInfo = undefined;
+                var METHODS: *[fieldsCount.props]glib.GDBusMethodInfo = undefined;
+            };
+
+            getInterfaceInfo(
+                Interface,
+                .Static,
+                .{
+                    .props = &infoArrays.PROPS,
+                    .signals = &infoArrays.SIGNALS,
+                    .methods = &infoArrays.METHODS,
+                },
+            );
+
+            const interface = &struct {
+                var INTERFACE: glib.GDBusInterfaceInfo = .{
+                    .ref_count = types.STATIC_REF_COUNT,
+                    .name = interfaceName,
+                    .methods = undefined,
+                    .signals = undefined,
+                    .properties = undefined,
+                    .annotations = null,
+                };
+            }.INTERFACE;
+
+            inline for (&infoArrays.PROPS, 0..) |info, index|
+                interface.properties[index] = info;
+
+            inline for (&infoArrays.SIGNALS, 0..) |info, index|
+                interface.signals[index] = info;
+
+            inline for (&infoArrays.METHODS, 0..) |info, index|
+                interface.methods[index] = info;
+
+            break :block interface;
+        };
+
+        const objectId = glib.g_dbus_connection_register_object(
+            self.conn,
+            objectPath,
+            interface,
+            null,
+            null,
+            null,
+            null,
+        );
+
+        if (objectId == 0) return RegisterObjectError.RegisterFail;
+    }
 };
+
 /// Returns a string corresponding to a type `T` in accordance to the specification:
 ///
 /// https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types

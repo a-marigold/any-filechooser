@@ -20,13 +20,13 @@ pub const ObjectPath = struct {
 /// `T` is a union-type of the Variant.
 pub fn Variant(comptime T: type) type {
     return struct {
-        value: T,
+        variant: T,
 
         pub const TYPE = T;
         pub const __IS_DBUS_VARIANT__ = true;
 
-        pub fn init(value: T) @This() {
-            return .{ .value = value };
+        pub fn init(variant: T) @This() {
+            return .{ .variant = variant };
         }
     };
 }
@@ -37,13 +37,13 @@ pub fn isVariant(comptime T: type) bool {
 /// Returns a D-Bus struct, created from struct `T`.
 pub fn Struct(comptime T: type) type {
     return struct {
-        value: T,
+        @"struct": T,
 
         pub const TYPE = T;
         pub const __IS_DBUS_STRUCT__ = true;
 
         pub fn init(value: T) @This() {
-            return .{ .value = value };
+            return .{ .@"struct" = value };
         }
     };
 }
@@ -70,14 +70,16 @@ pub fn isArray(comptime T: type) bool {
 
 /// Returns a D-Bus dict entry with key type `K` and value type `V`.
 pub fn DictEntry(comptime K: type, comptime V: type) type {
+    const Entry = struct { key: K, value: V };
+
     return struct {
-        entry: struct { K, V },
+        entry: Entry,
 
         pub const Key = K;
         pub const Value = V;
         pub const __IS_DBUS_DICT_ENTRY__ = true;
 
-        pub fn init(entry: struct { K, V }) @This() {
+        pub fn init(entry: Entry) @This() {
             return .{ .entry = entry };
         }
     };
@@ -134,7 +136,15 @@ pub fn isMethod(comptime T: type) bool {
     return @hasField(T, "__IS_DBUS_METHOD__");
 }
 
-/// Returns a representation of a D-Bus interface.
+/// Output argument of an interface method.
+///
+/// Used to allow returning multiple values.
+pub const OutArg = struct {
+    name: []const u8,
+    type: type,
+};
+
+/// Representation of a D-Bus interface.
 pub const Interface = struct {
     name: []const u8,
 

@@ -5,6 +5,8 @@ const Type = std.lang.Type;
 const mem = std.mem;
 const Io = std.Io;
 const process = std.process;
+const posix = std.posix;
+const linux = std.os.linux;
 const libdbus = @import("libdbus");
 const types = @import("dbusTypes.zig");
 
@@ -168,4 +170,54 @@ const DBusError = struct {
     pub inline fn deinit(self: *@This()) void {
         libdbus.dbus_error_free(@ptrCast(@constCast(&self.err)));
     }
+};
+
+const Epoll = struct {
+    fd: posix.fd_t,
+
+    inline fn init() @This() {
+        return .{ .fd = linux.epoll_create1(0) };
+    }
+
+    inline fn add(self: @This(), fd: posix.fd_t, event: *Event) void {
+        linux.epoll_ctl(
+            self.fd,
+            linux.EPOLL.CTL_ADD,
+            fd,
+            event,
+        );
+    }
+
+    pub const INFINITY_TIMEOUT = -1;
+    /// If passed to `wait` functions,
+    /// they don't block if there is a ready event.
+    pub const NON_BLOCK_TIMEOUT = 0;
+
+    inline fn waitOne(self: @This(), timeout: i32) Event {
+        var events: [1]linux.epoll_event = undefined;
+
+        linux.epoll_wait(self.fd, &events, events.len, timeout);
+
+        return .wrap(events[0]);
+    }
+
+    const Event = struct {
+        event: linux.epoll_event,
+
+        const TYPE_EDGE_TRIGGERED = linux.EPOLL.ET;
+        const TYPE_INPUT = linux.EPOLL.IN;
+        const TYPE_OUTPUT = linux.EPOLL.OUT;
+
+        inline fn init(eventTypes: u32, data: linux.epoll_data) @This() {
+            return .{ .event = .{
+                .events = @intFromEnum(eventTypes),
+                .data = data,
+            } };
+        }
+
+        // TODO: This may not be needed
+        inline fn wrap(event: linux.epoll_event) @This() {
+            return .{ .event = event };
+        }
+    };
 };

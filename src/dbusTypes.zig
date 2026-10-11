@@ -22,7 +22,7 @@ pub fn Variant(comptime T: type) type {
     return struct {
         variant: T,
 
-        pub const TYPE = T;
+        pub const Type = T;
         pub const __IS_DBUS_VARIANT__ = true;
 
         pub fn init(variant: T) @This() {
@@ -39,7 +39,7 @@ pub fn Struct(comptime T: type) type {
     return struct {
         @"struct": T,
 
-        pub const TYPE = T;
+        pub const Type = T;
         pub const __IS_DBUS_STRUCT__ = true;
 
         pub fn init(value: T) @This() {
@@ -77,6 +77,7 @@ pub fn DictEntry(comptime K: type, comptime V: type) type {
 
         pub const Key = K;
         pub const Value = V;
+
         pub const __IS_DBUS_DICT_ENTRY__ = true;
 
         pub fn init(entry: Entry) @This() {
@@ -89,12 +90,14 @@ pub fn isDictEntry(comptime T: type) bool {
 }
 
 /// Creates a Property representation of a D-Bus interface.
-pub fn Prop(comptime V: type, comptime mode: enum { Read, Write, ReadWrite }) type {
+pub fn Prop(comptime name: [:0]const u8, comptime V: type, comptime mode: enum { Read, Write, ReadWrite }) type {
     return struct {
         value: V,
 
-        pub const Type = V;
+        pub const NAME = name;
         pub const MODE = mode;
+        pub const Type = V;
+
         pub const __IS_DBUS_PROP__ = true;
 
         pub fn init(value: V) V {
@@ -107,8 +110,9 @@ pub fn isProp(comptime T: type) bool {
 }
 
 /// Creates a Signal representation of D-Bus interface.
-pub fn Signal() type {
+pub fn Signal(comptime name: [:0]const u8) type {
     return struct {
+        pub const NAME = name;
         pub const __IS_DBUS_SIGNAL__ = true;
 
         pub fn init() @This() {
@@ -121,10 +125,12 @@ pub fn isSignal(comptime T: type) bool {
 }
 
 /// Creates a Method representation of a D-Bus interface.
-pub fn Method(comptime Callback: type) type {
+pub fn Method(comptime name: [:0]const u8, comptime Callback: type) type {
     return struct {
         callback: Callback,
 
+        const NAME = name;
+        const Type = Callback;
         pub const __IS_DBUS_METHOD__ = true;
 
         pub fn init(callback: Callback) @This() {

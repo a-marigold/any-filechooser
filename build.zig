@@ -4,29 +4,32 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const glib = b.addTranslateC(.{
-        .root_source_file = b.path("src/glibBridge.h"),
+    const libdbus = b.addTranslateC(.{
+        .root_source_file = b.path("src/libdbusBridge.h"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+    libdbus.addIncludePath(b.graph.cwdRelativePath("/usr/include/dbus-1.0"));
+    libdbus.addIncludePath(b.graph.cwdRelativePath("/usr/lib/dbus-1.0/include"));
 
-    glib.linkSystemLibrary("glib-2.0", .{});
+    const mainMod = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+        .imports = &.{
+            .{ .name = "libdbus", .module = libdbus.createModule() },
+        },
+    });
+
+    mainMod.linkSystemLibrary("glib-2.0", .{});
 
     const exe = b.addExecutable(.{
         .name = "any_filechooser",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-            .imports = &.{
-                .{ .name = "glib", .module = glib.createModule() },
-            },
-        }),
+        .root_module = mainMod,
     });
 
-    exe.root_module.linkSystemLibrary("glib-2.0", .{});
     b.installArtifact(exe);
 
     const checkStep = b.step("check", "Build on save");

@@ -146,15 +146,28 @@ pub fn isMethod(comptime T: type) bool {
 ///
 /// Used to allow returning multiple values.
 pub const OutArg = struct {
-    name: []const u8,
+    name: [:0]const u8,
     type: type,
 };
 
-/// Representation of a D-Bus interface.
-pub const Interface = struct {
-    name: []const u8,
+/// D-Bus interface that can be exposed at some object path.
+///
+/// `propTypes`, `signalTypes`, `methodTypes` consist of
+/// `Prop`, `Signal`, `Method` types of this module respectivly.
+pub fn Interface(comptime name: [:0]const u8, propTypes: []const type, signalTypes: []const type, methodTypes: []const type) type {
+    return struct {
+        props: @Tuple(propTypes),
+        signals: @Tuple(signalTypes),
+        methods: @Tuple(methodTypes),
 
-    props: []const struct { name: []const u8, type: type },
-    signals: []const struct { name: []const u8 },
-    methods: []const struct { name: []const u8, type: type },
-};
+        pub const NAME = name;
+
+        pub fn init(props: @Tuple(propTypes), signals: @Tuple(signalTypes), methods: @Tuple(methodTypes)) @This() {
+            return .{
+                .props = props,
+                .signals = signals,
+                .methods = methods,
+            };
+        }
+    };
+}

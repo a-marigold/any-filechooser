@@ -184,17 +184,25 @@ const DBusError = struct {
 const Epoll = struct {
     fd: posix.fd_t,
 
-    inline fn init() @This() {
-        return .{ .fd = linux.epoll_create1(0) };
+    const InitError = error{CreateEpollFail};
+    inline fn init() InitError!@This() {
+        const fd = linux.epoll_create1(0);
+
+        if (fd == -1) return InitError.CreateEpollFail;
+
+        return .{ .fd = fd };
     }
 
-    inline fn add(self: @This(), fd: posix.fd_t, event: *Event) void {
-        linux.epoll_ctl(
+    const AddFdError = error{AddFdFail};
+    inline fn addFd(self: @This(), fd: posix.fd_t, event: *Event) void {
+        const addResult = linux.epoll_ctl(
             self.fd,
             linux.EPOLL.CTL_ADD,
             fd,
             event,
         );
+
+        if (addResult == -1) return AddFdError.AddFdFail;
     }
 
     pub const INFINITY_TIMEOUT = -1;
@@ -202,10 +210,25 @@ const Epoll = struct {
     /// they don't block if there is a ready event.
     pub const NON_BLOCK_TIMEOUT = 0;
 
-    inline fn waitOne(self: @This(), timeout: i32) Event {
+    const WaitError = error{ Timeout, Interrupt, Unexpected };
+
+    inline fn waitOne(self: @This(), timeout: i32) WaitError!Event {
         var events: [1]linux.epoll_event = undefined;
 
-        linux.epoll_wait(self.fd, &events, events.len, timeout);
+        const waitResult = linux.epoll_wait(self.fd, &events, events.len, timeout);
+
+        if (waitResult == 0) {
+            @branchHint(.unlikely);
+
+            return WaitError.Timeout;
+        } else if (waitResult == -1) {
+            @branchHint(.unlikely);
+
+            return switch (linux.errno(waitResult)) {
+                linux.E.INTR => WaitError.Interrupt,
+                else => WaitError.Unexpected,
+            };
+        }
 
         return .wrap(events[0]);
     }
@@ -219,7 +242,11 @@ const Epoll = struct {
             EdgeTriggered = linux.EPOLL.ET,
         };
 
-        inline fn init(eventTypes: anytype, data: linux.epoll_data) @This() {
+        inline fn init(
+            /// Array of `Type` enum.
+            eventTypes: anytype,
+            data: linux.epoll_data,
+        ) @This() {
             const eventTypesMask = block: {
                 var mask: u32 = 0;
                 inline for (eventTypes) |eventType| {

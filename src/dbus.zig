@@ -44,7 +44,7 @@ pub const Conn = struct {
     /// Requests the D-Bus for a well-known name.
     ///
     /// Returns an error if `name` is already taken by another server.
-    pub fn requestName(self: *@This(), name: [:0]const u8) void {
+    pub fn requestName(self: @This(), name: [:0]const u8) RequestNameError!void {
         var nameErr: DBusError = .init();
 
         const nameCode = libdbus.dbus_bus_request_name(
@@ -60,6 +60,15 @@ pub const Conn = struct {
             return RequestNameError.NameAlreadyTaken;
     }
 
+    /// Returns file descriptor of the opened D-Bus connection socket.
+    pub fn getSocketFd(self: @This()) posix.fd_t {
+        var fd: posix.fd_t = undefined;
+
+        _ = libdbus.dbus_connection_get_unix_fd(self.conn, &fd);
+
+        return fd;
+    }
+
     const RegisterObjectError = error{RegisterFail};
     /// Registers `objectPath` and `Interface` at that path.
     ///
@@ -69,7 +78,7 @@ pub const Conn = struct {
     /// - `types.Method`
     ///
     /// If a field of `Interface` struct isn't
-    /// the one above types, a compile error is triggerred.
+    /// the one above types, a compile error is triggered.
     ///
     /// Declarations of `Interface` are ignored.
     pub fn registerSingleton(

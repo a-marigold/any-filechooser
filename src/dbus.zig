@@ -6,8 +6,8 @@ const mem = std.mem;
 const Io = std.Io;
 const process = std.process;
 const posix = std.posix;
-const linux = std.os.linux;
 const libdbus = @import("libdbus");
+const Epoll = @import("Epoll.zig");
 const types = @import("dbusTypes.zig");
 
 const USER_SESSION_BUS_TYPE = libdbus.DBUS_BUS_SESSION;
@@ -179,94 +179,4 @@ const DBusError = struct {
     pub inline fn deinit(self: *@This()) void {
         libdbus.dbus_error_free(@ptrCast(@constCast(&self.err)));
     }
-};
-
-const Epoll = struct {
-    fd: posix.fd_t,
-
-    const InitError = error{CreateEpollFail};
-    inline fn init() InitError!@This() {
-        const fd = linux.epoll_create1(0);
-
-        if (fd == -1) return InitError.CreateEpollFail;
-
-        return .{ .fd = fd };
-    }
-
-    const AddFdError = error{AddFdFail};
-    inline fn addFd(self: @This(), fd: posix.fd_t, event: *Event) void {
-        const addResult = linux.epoll_ctl(
-            self.fd,
-            linux.EPOLL.CTL_ADD,
-            fd,
-            event,
-        );
-
-        if (addResult == -1) return AddFdError.AddFdFail;
-    }
-
-    pub const INFINITY_TIMEOUT = -1;
-    /// If passed to `wait` functions,
-    /// they don't block if there is a ready event.
-    pub const NON_BLOCK_TIMEOUT = 0;
-
-    const WaitError = error{ Timeout, Interrupt, Unexpected };
-
-    inline fn waitOne(self: @This(), timeout: i32) WaitError!Event {
-        var events: [1]linux.epoll_event = undefined;
-
-        const waitResult = linux.epoll_wait(self.fd, &events, events.len, timeout);
-
-        if (waitResult == 0) {
-            @branchHint(.unlikely);
-
-            return WaitError.Timeout;
-        } else if (waitResult == -1) {
-            @branchHint(.unlikely);
-
-            return switch (linux.errno(waitResult)) {
-                linux.E.INTR => WaitError.Interrupt,
-                else => WaitError.Unexpected,
-            };
-        }
-
-        return .wrap(events[0]);
-    }
-
-    const Event = struct {
-        event: linux.epoll_event,
-
-        const Type = enum(comptime_int) {
-            In = linux.EPOLL.IN,
-            Out = linux.EPOLL.OUT,
-            EdgeTriggered = linux.EPOLL.ET,
-        };
-
-        inline fn init(
-            /// Array of `Type` enum.
-            eventTypes: anytype,
-            data: linux.epoll_data,
-        ) @This() {
-            const eventTypesMask = block: {
-                var mask: u32 = 0;
-                inline for (eventTypes) |eventType| {
-                    mask |= eventType;
-                }
-
-                break :block mask;
-            };
-
-            return .{
-                .event = .{
-                    .events = eventTypesMask,
-                    .data = data,
-                },
-            };
-        }
-
-        /// Wrap an existing event.
-        inline fn wrap(event: linux.epoll_event) @This() {
-            return .{ .event = event };
-        }
-    };
 };

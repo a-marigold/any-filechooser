@@ -213,18 +213,31 @@ const Epoll = struct {
     const Event = struct {
         event: linux.epoll_event,
 
-        const TYPE_EDGE_TRIGGERED = linux.EPOLL.ET;
-        const TYPE_INPUT = linux.EPOLL.IN;
-        const TYPE_OUTPUT = linux.EPOLL.OUT;
+        const Type = enum(comptime_int) {
+            In = linux.EPOLL.IN,
+            Out = linux.EPOLL.OUT,
+            EdgeTriggered = linux.EPOLL.ET,
+        };
 
-        inline fn init(eventTypes: u32, data: linux.epoll_data) @This() {
-            return .{ .event = .{
-                .events = @intFromEnum(eventTypes),
-                .data = data,
-            } };
+        inline fn init(eventTypes: anytype, data: linux.epoll_data) @This() {
+            const eventTypesMask = block: {
+                var mask: u32 = 0;
+                inline for (eventTypes) |eventType| {
+                    mask |= eventType;
+                }
+
+                break :block mask;
+            };
+
+            return .{
+                .event = .{
+                    .events = eventTypesMask,
+                    .data = data,
+                },
+            };
         }
 
-        // TODO: This may not be needed
+        /// Wrap an existing event.
         inline fn wrap(event: linux.epoll_event) @This() {
             return .{ .event = event };
         }

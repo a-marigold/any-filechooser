@@ -129,6 +129,11 @@ pub const Message = struct {
         else
             null;
     }
+
+    /// Free the message memory.
+    pub inline fn free(self: @This()) void {
+        libdbus.dbus_message_unref();
+    }
 };
 
 /// Internal `libdbus` error.

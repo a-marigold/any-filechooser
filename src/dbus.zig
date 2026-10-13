@@ -65,6 +65,43 @@ pub const Conn = struct {
     }
 };
 
+/// D-Bus message to send or to receive.
+pub const Message = struct {
+    message: *libdbus.DBusMessage,
+
+    pub const Types = enum(i32) {
+        pub const METHOD_CALL = libdbus.DBUS_MESSAGE_TYPE_METHOD_CALL;
+        pub const METHOD_RETURN = libdbus.DBUS_MESSAGE_TYPE_METHOD_RETURN;
+        pub const ERROR = libdbus.DBUS_MESSAGE_TYPE_ERROR;
+        pub const SIGNAL = libdbus.DBUS_MESSAGE_TYPE_SIGNAL;
+    };
+
+    /// Returns one of declarations of `Types` or any other unknown value.
+    ///
+    /// If an unknown value is returned, it should be ignored.
+    pub inline fn getType(self: @This()) i32 {
+        const messageType = libdbus.dbus_message_get_type(self.message);
+
+        return @fromBackingInt(messageType);
+    }
+
+    /// Returns object path of the message or `null` if no specified.
+    pub inline fn getObjectPath(self: @This()) ?[]const u8 {
+        return if (libdbus.dbus_message_get_path(self.message)) |objectPath|
+            mem.span(objectPath)
+        else
+            null;
+    }
+
+    /// Returns interface name of the message or `null` if no specified.
+    pub inline fn getInterfaceName(self: @This()) ?[]const u8 {
+        return if (libdbus.dbus_message_get_interface(self.message)) |interfaceName|
+            mem.span(interfaceName)
+        else
+            null;
+    }
+};
+
 /// Internal `libdbus` error.
 const LibdbusError = struct {
     err: DBusError,

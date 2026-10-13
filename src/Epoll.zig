@@ -1,8 +1,7 @@
 const std = @import("std");
-const posix = std.posix;
 const linux = std.os.linux;
 
-fd: posix.fd_t,
+fd: linux.fd_t,
 
 pub const InitError = error{CreateEpollFail};
 pub inline fn init() InitError!@This() {
@@ -14,7 +13,8 @@ pub inline fn init() InitError!@This() {
 }
 
 pub const AddFdError = error{AddFdFail};
-pub inline fn addFd(self: @This(), fd: posix.fd_t, event: *Event) AddFdError!void {
+/// Adds `fd` and its `event` to the epoll context.
+pub inline fn addFd(self: @This(), fd: linux.fd_t, event: *Event) AddFdError!void {
     const addResult = linux.epoll_ctl(
         self.fd,
         linux.EPOLL.CTL_ADD,
@@ -25,32 +25,35 @@ pub inline fn addFd(self: @This(), fd: posix.fd_t, event: *Event) AddFdError!voi
     if (addResult == -1) return AddFdError.AddFdFail;
 }
 
-pub const INFINITY_TIMEOUT = -1;
-/// If passed to `wait` functions,
-/// they don't block if there is a ready event.
-pub const NON_BLOCK_TIMEOUT = 0;
+pub const Timeouts = struct {
+    pub const INFINITY = -1;
+
+    /// If passed to `wait` functions,
+    /// they don't block if there is a ready event.
+    pub const NON_BLOCK = 0;
+};
 
 pub const WaitError = error{ Timeout, Interrupt, Unexpected };
 
-pub inline fn waitOne(self: @This(), timeout: i32) WaitError!Event {
-    var events: [1]linux.epoll_event = undefined;
+/// Waits for file descriptors, writes ready events of them to `events`,
+/// and returns a slice of `events`, length of which is the amount of ready events.
+pub inline fn wait(self: @This(), timeout: i32, events: []linux.epoll_event) WaitError![]linux.epoll_event {
+    const readyEventsLen = linux.epoll_wait(
+        self.fd,
+        events,
+        events.len,
+        timeout,
+    );
 
-    const waitResult = linux.epoll_wait(self.fd, &events, events.len, timeout);
-
-    if (waitResult == 0) {
-        @branchHint(.unlikely);
-
-        return WaitError.Timeout;
-    } else if (waitResult == -1) {
-        @branchHint(.unlikely);
-
-        return switch (linux.errno(waitResult)) {
+    if (readyEventsLen == 0)
+        return WaitError.Timeout
+    else if (readyEventsLen == -1)
+        return switch (linux.errno(readyEventsLen)) {
             linux.E.INTR => WaitError.Interrupt,
             else => WaitError.Unexpected,
         };
-    }
 
-    return .wrap(events[0]);
+    return events[0..readyEventsLen];
 }
 
 /// Epoll event for a file descriptor.
@@ -85,7 +88,7 @@ pub const Event = struct {
         };
     }
 
-    /// Wrap an existing event.
+    /// Wrap an existing event's low-level struct.
     pub inline fn wrap(event: linux.epoll_event) @This() {
         return .{ .event = event };
     }

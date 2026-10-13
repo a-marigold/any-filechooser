@@ -12,13 +12,6 @@ const types = @import("dbusTypes.zig");
 
 const USER_SESSION_BUS_TYPE = libdbus.DBUS_BUS_SESSION;
 
-const G_DBUS_PROPERTY_INFO_FLAGS_READABLE = libdbus.Gio.DBusPropertyInfoFlags.G_DBUS_PROPERTY_INFO_FLAGS_READABLE;
-const G_DBUS_PROPERTY_INFO_FLAGS_WRITABLE = libdbus.Gio.DBusPropertyInfoFlags.G_DBUS_PROPERTY_INFO_FLAGS_WRITABLE;
-
-const G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE = libdbus.BusNameOwnerFlags.G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE;
-
-const STATIC_REF_COUNT = -1;
-
 /// D-Bus connection.
 pub const Conn = struct {
     conn: *libdbus.DBusConnection,
@@ -26,7 +19,7 @@ pub const Conn = struct {
     const InitError = error{InitFail};
     /// Initializes a connection to a user session D-Bus.
     pub inline fn init() InitError!@This() {
-        var connErr: DBusError = .init();
+        var connErr: LibdbusError = .init();
 
         const conn = libdbus.dbus_bus_get(USER_SESSION_BUS_TYPE, connErr.getPtr());
 
@@ -45,7 +38,7 @@ pub const Conn = struct {
     ///
     /// Returns an error if `name` is already taken by another server.
     pub fn requestName(self: @This(), name: [:0]const u8) RequestNameError!void {
-        var nameErr: DBusError = .init();
+        var nameErr: LibdbusError = .init();
 
         const nameCode = libdbus.dbus_bus_request_name(
             self.conn,
@@ -61,6 +54,8 @@ pub const Conn = struct {
     }
 
     /// Returns file descriptor of the opened D-Bus connection socket.
+    ///
+    /// The socket is always non-blocking.
     pub fn getSocketFd(self: @This()) posix.fd_t {
         var fd: posix.fd_t = undefined;
 
@@ -68,42 +63,48 @@ pub const Conn = struct {
 
         return fd;
     }
+};
 
-    const RegisterObjectError = error{RegisterFail};
-    /// Registers `objectPath` and `Interface` at that path.
-    ///
-    /// Fields of `Interface` struct can be:
-    /// - `types.Prop`
-    /// - `types.Signal`
-    /// - `types.Method`
-    ///
-    /// If a field of `Interface` struct isn't
-    /// the one above types, a compile error is triggered.
-    ///
-    /// Declarations of `Interface` are ignored.
-    pub fn registerSingleton(
-        self: *@This(),
-        objectPath: [:0]const u8,
-        comptime interface: types.Interface,
-    ) RegisterObjectError!void {
-        const objectId = libdbus.g_dbus_connection_register_object(
-            self.conn,
-            objectPath,
-            interface,
-            null,
-            null,
-            null,
-            null,
-        );
+/// Internal `libdbus` error.
+const LibdbusError = struct {
+    err: DBusError,
 
-        if (objectId == 0) return RegisterObjectError.RegisterFail;
+    /// `DBusError` from `libdbus` has bit fields,
+    /// so C translation declares it as opaque type.
+    const DBusError = packed struct {
+        name: usize,
+        message: usize,
+        _dummy: u5,
+        _padding: usize,
+    };
+
+    pub inline fn init() @This() {
+        var err: DBusError = undefined;
+        libdbus.dbus_error_init(@ptrCast(&err));
+
+        return .{ .err = err };
+    }
+
+    /// Returns a pointer to the error to be passed to `libdbus` functions.
+    pub inline fn getPtr(self: *@This()) *libdbus.DBusError {
+        return @ptrCast(@constCast(&self.err));
+    }
+
+    pub inline fn isSet(self: *@This()) bool {
+        return libdbus.dbus_error_is_set(@ptrCast(@constCast(&self.err))) != 0;
+    }
+
+    /// Should be called only if an error is set,
+    /// otherwise there is nothing to deinitialize.
+    pub inline fn deinit(self: *@This()) void {
+        libdbus.dbus_error_free(@ptrCast(@constCast(&self.err)));
     }
 };
 
 /// Returns a D-Bus signature string.
 ///
 /// `T` must be one of types from `dbusTypes` module
-/// (primitives like `bool` and `u64` are passes as-is).
+/// (primitives like `bool` and `u64` are passed as-is).
 ///
 /// See - https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
 pub fn signatureFromType(comptime T: type) []const u8 {
@@ -146,37 +147,3 @@ pub fn signatureFromType(comptime T: type) []const u8 {
         },
     };
 }
-
-const DBusError = struct {
-    err: LibdbusError,
-
-    /// `DBusError` from `libdbus` has bit fields,
-    /// so C translation declares it as opaque type.
-    const LibdbusError = packed struct {
-        name: usize,
-        message: usize,
-        _dummy: u5,
-        _padding: usize,
-    };
-
-    pub inline fn init() @This() {
-        var err: LibdbusError = undefined;
-        libdbus.dbus_error_init(@ptrCast(&err));
-
-        return .{ .err = err };
-    }
-
-    /// Returns a pointer to the error to be passed to `libdbus` fucntions.
-    pub inline fn getPtr(self: *@This()) *libdbus.DBusError {
-        return @ptrCast(@constCast(&self.err));
-    }
-
-    pub inline fn isSet(self: *@This()) bool {
-        return libdbus.dbus_error_is_set(@ptrCast(@constCast(&self.err))) != 0;
-    }
-
-    /// Should be called only if an error is set.
-    pub inline fn deinit(self: *@This()) void {
-        libdbus.dbus_error_free(@ptrCast(@constCast(&self.err)));
-    }
-};

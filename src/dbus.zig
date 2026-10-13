@@ -53,6 +53,35 @@ pub const Conn = struct {
             return RequestNameError.NameAlreadyTaken;
     }
 
+    const ReadNextMessageError = error{
+        /// Cannot read from the socket 'cause it is closed.
+        ConnClosed,
+
+        /// There is no message to return.
+        QueueEnd,
+    };
+    /// Reads the next message from the connection socket,
+    /// allocates memory for it and copies the message there.
+    ///
+    /// If called when the socket buffer is empty,
+    /// and if there is no message in the internal queue,
+    /// returns `ReadNextMessageError.QueueEnd`.
+    pub fn readNextMessage(self: @This()) ReadNextMessageError!Message {
+        const writeMessageQueueResult = libdbus.dbus_connection_read_write(
+            self.conn,
+            0, // Not to block the thread
+        );
+
+        if (writeMessageQueueResult == false) return ReadNextMessageError.ConnClosed;
+
+        if (libdbus.dbus_connection_pop_message(self.conn)) |message|
+            return .{ .message = message };
+
+        return ReadNextMessageError.QueueEnd;
+    }
+
+    // TODO: freeMessage
+
     /// Returns file descriptor of the opened D-Bus connection socket.
     ///
     /// The socket is always non-blocking.
